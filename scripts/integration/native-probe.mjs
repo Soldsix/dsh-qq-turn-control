@@ -42,11 +42,18 @@ async function probe(ctx,config){
   await send(source('sixth','one','bob',false,quote('reply-1')));assert.equal(ctx.turnTest.outputs.length,3)
   await send(source('seventh','two','carol',true,text('DIRECT AGAIN')));assert.equal(ctx.turnTest.outputs.length,4)
   checks.push('native-setting-reload-clears-quote-cache-and-direct-requests-still-work')
+  await invoke('save',{request:{revision:saved.revision,patch:{intentEnabled:true}}})
+  await send(source('intent-first','two','alice',true,text('INTENT_FIRST')));assert.equal(ctx.turnTest.outputs.length,5)
+  await send(source('intent-b','two','bob',false,text('UNQUOTED_B')));assert.equal(ctx.turnTest.outputs.length,6)
+  const request=ctx.turnTest.intentRequests.find(item=>item.candidate.text==='UNQUOTED_B')
+  assert.ok(request);assert.deepEqual(request.history.map(item=>[item.speaker,item.text]),[['member-1','INTENT_FIRST'],['bot','LAB_REPLY_5']]);assert.equal(request.candidate.speaker,'member-2')
+  assert.ok(!JSON.stringify(request).includes('alice'));assert.ok(!JSON.stringify(request).includes('bob'))
+  checks.push('optional-intent-provider-receives-scoped-context-and-routes-unquoted-followup')
   for(let index=0;index<15;index++){
    const directed=index===8,referenced=index===5,peer=referenced?'two':index%2?'one':'two'
-   await send(source('participant-'+index,peer,'participant-'+index,directed,referenced?quote('reply-4'):text('participant message '+index)))
+   await send(source('participant-'+index,peer,'participant-'+index,directed,referenced?quote('reply-5'):text('participant message '+index)))
   }
-  assert.equal(ctx.turnTest.outputs.length,6)
+  assert.equal(ctx.turnTest.outputs.length,8)
   checks.push('fifteen-synthetic-participants-produce-only-one-quote-and-one-explicit-reply')
   await writeFile(config.resultPath,JSON.stringify({passed:true,checks,outputs:ctx.turnTest.outputs.length,realQqMessagesSent:0},null,2)+'\n')
  }catch(error){await writeFile(config.resultPath,JSON.stringify({passed:false,checks,error:{message:error.message,stack:error.stack},realQqMessagesSent:0},null,2)+'\n')}

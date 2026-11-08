@@ -52,6 +52,7 @@
   "peerDependencies": {
     "@deepseek-ai/cordis": "~4.1.0",
     "@deepseek-ai/schemastery": "~3.19.0",
+    "@deepseek-ai/dsh-brand": "0.2.2-rc.1",
     "dsh-im-kit": "0.2.0",
     "dsh-qq-chat": "0.2.0-development",
     "@deepseek-ai/cordis-plugin-loader": "~1.1.0",
@@ -62,6 +63,7 @@
     "typescript": "5.9.3",
     "@types/node": "24.0.0",
     "@deepseek-ai/dsh": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-brand": "0.2.2-rc.1",
     "@types/js-yaml": "4.0.9",
     "@types/react": "18.3.28",
     "@types/react-dom": "18.3.7",

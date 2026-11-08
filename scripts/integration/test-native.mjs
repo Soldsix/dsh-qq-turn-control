@@ -81,7 +81,7 @@ const exit=once(child,'close').then(([code,signal])=>{exitCode=code;return{code,
 try{
  const deadline=Date.now()+90000
  while(Date.now()<deadline){try{result=JSON.parse(await readFile(join(attempt,'result.json'),'utf8'));break}catch(error){if(error.code!=='ENOENT')throw error}assert.equal(exitCode,undefined,'Native DSH exited before the routing probe');await delay(30)}
- assert.ok(result,'Native routing probe timed out');assert.equal(result.passed,true,JSON.stringify(result.error));assert.equal(captures.length,6)
+ assert.ok(result,'Native routing probe timed out');assert.equal(result.passed,true,JSON.stringify(result.error));assert.equal(captures.length,8)
  assert.ok(JSON.stringify(captures[1].messages).includes('FIRST'));assert.ok(JSON.stringify(captures[1].messages).includes('LAB_REPLY_1'))
  assert.ok(!JSON.stringify(captures[2].messages).includes('FIRST'),'Conversation history crossed groups')
  child.stdin.write(JSON.stringify({jsonrpc:'2.0',id:1,method:'shutdown',params:{}})+'\n')
