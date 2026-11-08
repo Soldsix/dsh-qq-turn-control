@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write README.md
+/:
+  en: ed44fa1617494fb0
+  zh: 2e8005b9131cec9c
+/dsh-qq-turn-control:
+  en: bb4615e12c638551
+  zh: 8247c6341093f573
+/dsh-qq-turn-control/summary:
+  en: 8808955f99dfa059
+  zh: 6eaa4cdf449b07c1
+/dsh-qq-turn-control/table-of-contents:
+  en: 4084ff69643e0719
+  zh: 91070e8b485a01cb
+/dsh-qq-turn-control/use-and-limits:
+  en: 0a71dc11071ed821
+  zh: 963eaea1bbeeb5b3
+/dsh-qq-turn-control/testing-and-privacy:
+  en: 1fb5d6c01995dbeb
+  zh: 48339d493a81a627

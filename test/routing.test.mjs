@@ -1,7 +1,7 @@
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
 import {identifier} from 'dsh-im-kit'
-import {Config,QuotePolicy} from '../dist/index.js'
+import {Config,QuotePolicy,apply} from '../dist/index.js'
 const account={tenantId:identifier('im.tenant','synthetic'),networkId:identifier('im.network','synthetic'),accountId:identifier('im.account','bot')}
 const msg=(peer,parts=[])=>({scope:{account,kind:'group',peerId:identifier('im.peer',peer)},messageId:identifier('im.message','incoming'),senderId:identifier('im.user','alice'),sentAt:Date.now(),receivedAt:Date.now(),parts,directedToBot:false})
 const result=(status='accepted')=>({status:'responded',modelOutcome:'completed',receipt:status==='accepted'?{status,messageIds:[identifier('im.message','bot-reply')]}:{status:'uncertain',code:'timeout'}})
@@ -15,4 +15,14 @@ test('scope capacity and cancellation do not leak prior reply targets',async()=>
  const policy=new QuotePolicy(Config({enabled:true,maxScopes:1})),quote=[{type:'reply',messageId:identifier('im.message','bot-reply')}],controller=new AbortController()
  policy.observe(msg('one'),result());policy.observe(msg('two'),result());assert.equal(await policy.decide(msg('one',quote),controller.signal),'default');assert.equal(await policy.decide(msg('two',quote),controller.signal),'reply')
  controller.abort();await assert.rejects(policy.decide(msg('two',quote),controller.signal),error=>error.name==='AbortError')
+})
+test('quote expiry uses a monotonic window including the configured boundary',async()=>{
+ let now=1000;const policy=new QuotePolicy(Config({enabled:true,quoteWindowMs:100}),()=>now),quote=[{type:'reply',messageId:identifier('im.message','bot-reply')}],signal=new AbortController().signal
+ policy.observe(msg('one'),result());now=1100;assert.equal(await policy.decide(msg('one',quote),signal),'reply')
+ now=1101;assert.equal(await policy.decide(msg('one',quote),signal),'default');now=999;assert.equal(await policy.decide(msg('one',quote),signal),'default')
+})
+test('enabling refuses to replace another policy while disabled mode leaves it untouched',()=>{
+ const existing={};let effects=0;const ctx={get:()=>existing,effect:()=>{effects++}}
+ apply(ctx,Config({enabled:false}));assert.equal(effects,0)
+ assert.throws(()=>apply(ctx,Config({enabled:true})),/Another turn policy/);assert.equal(effects,0)
 })

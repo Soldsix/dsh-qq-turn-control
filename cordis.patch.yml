@@ -1,4 +1,6 @@
 - insert:
+    - id: qq-turn-control-settings
+      name: dsh-qq-turn-control/control
     - id: qq-turn-control
       name: dsh-qq-turn-control
       config:

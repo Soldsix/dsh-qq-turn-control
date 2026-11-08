@@ -1,0 +1,10 @@
+.qqturn-page { display: flex; flex-direction: column; gap: 16px; max-width: 780px; min-width: 0; padding: 4px 0 16px; color: var(--dsw-alias-label-primary); font-size: 13px; }
+.qqturn-page p { margin: 0; line-height: 1.6; }
+.qqturn-help { color: var(--dsw-alias-label-secondary); }
+.qqturn-page form { display: flex; flex-direction: column; gap: 14px; padding: 16px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 12px; }
+.qqturn-field { display: grid; grid-template-columns: minmax(160px, 1fr) minmax(160px, 1fr); gap: 8px 20px; align-items: center; }
+.qqturn-field input { width: 100%; box-sizing: border-box; }
+.qqturn-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.qqturn-spinner { align-self: center; width: 20px; height: 20px; margin: 48px; border: 2px solid var(--dsw-alias-border-l2); border-top-color: var(--dsw-alias-label-primary); border-radius: 50%; animation: qqturn-spin 0.8s linear infinite; }
+@keyframes qqturn-spin { to { transform: rotate(360deg); } }
+@media (max-width: 600px) { .qqturn-field { grid-template-columns: minmax(0, 1fr); gap: 8px; } .qqturn-page form { padding: 12px; } }
