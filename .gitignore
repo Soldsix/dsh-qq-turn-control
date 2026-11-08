@@ -1,0 +1,7 @@
+node_modules/
+dist/
+artifacts/
+.npm-cache/
+.test-artifacts/
+*.log
+*.tgz

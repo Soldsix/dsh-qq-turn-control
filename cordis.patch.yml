@@ -1,0 +1,5 @@
+- insert:
+    - id: qq-turn-control
+      name: dsh-qq-turn-control
+      config:
+        enabled: false
