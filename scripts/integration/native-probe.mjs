@@ -12,6 +12,14 @@ async function probe(ctx,config){
   const source=(id,peer,sender,directed,parts)=>{const now=Date.now();return{scope:{account:ctx.turnTest.account,kind:'group',peerId:identifier('im.peer',peer)},messageId:identifier('im.message',id),senderId:identifier('im.user',sender),sentAt:now,receivedAt:now,directedToBot:directed,parts}}
   const text=value=>[{type:'text',text:value}],quote=id=>[{type:'reply',messageId:identifier('im.message',id)},{type:'text',text:'I disagree'}]
   const send=async message=>{const report=await ctx.im.publish(message,new AbortController().signal);assert.equal(report.failed,0);assert.equal(report.accepted,1)}
+  const policy=ctx.get('qqTurnPolicy'),originalDecide=policy.decide.bind(policy);let decisions=0,observations=0
+  policy.seen=()=>{observations++};policy.decide=async(...args)=>{decisions++;return originalDecide(...args)}
+  const muted=source('muted','one','alice',false,text('muted'))
+  ctx.turnTest.setAvailability('muted');await send(muted);await send(muted);ctx.turnTest.setAvailability('available')
+  assert.equal(observations,1);assert.equal(decisions,0);assert.equal(ctx.turnTest.outputs.length,0)
+  const stale=source('stale','one','alice',false,text('stale'));stale.sentAt=1;stale.receivedAt=1;await send(stale)
+  assert.equal(observations,1);assert.equal(decisions,0)
+  checks.push('muted-duplicate-and-expired-events-never-trigger-policy-decision')
   await send(source('first','one','alice',true,text('FIRST')));assert.equal(ctx.turnTest.outputs.length,1)
   await send(source('second','one','bob',false,quote('reply-1')));assert.equal(ctx.turnTest.outputs.length,2)
   checks.push('other-sender-quote-enters-chat-through-native-policy')
