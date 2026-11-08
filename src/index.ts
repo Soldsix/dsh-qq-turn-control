@@ -52,6 +52,5 @@ export function apply(ctx:Context,config:Config):void{
  if(!config.enabled)return
  validateConfig(config)
  if(ctx.get('qqTurnPolicy'))throw new Error('Another turn policy is already installed')
- if(config.intentEnabled&&!ctx.get('qqTurnIntent'))throw new Error('Intent classifier is unavailable')
  ctx.effect(()=>ctx.provide('qqTurnPolicy',new QuotePolicy(config,()=>performance.now(),()=>ctx.get('qqTurnIntent'))))
 }

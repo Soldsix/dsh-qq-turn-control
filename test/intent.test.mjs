@@ -3,6 +3,8 @@ import assert from 'node:assert/strict'
 import {identifier} from 'dsh-im-kit'
 import {Config,QuotePolicy,apply} from '../dist/index.js'
 import {RecentContext} from '../dist/intent.js'
+import {Context} from '@deepseek-ai/cordis'
+import {setTimeout as delay} from 'node:timers/promises'
 
 const ident=(domain,value)=>identifier('im.'+domain,value)
 const account={tenantId:ident('tenant','t'),networkId:ident('network','n'),accountId:ident('account','a')}
@@ -52,9 +54,22 @@ test('quote wins without classifier; unquoted decision receives a snapshot and t
  assert.deepEqual(requests[0].request.history.map(x=>x.text),['What do you think?','My opinion'])
  policy.seen(quote);assert.equal(await policy.decide(quote,controller.signal),'reply');assert.equal(requests.length,1)
 })
-test('intent routing is opt-in, refuses a missing provider and rejects excessive memory settings',()=>{
+test('intent routing is opt-in and rejects excessive memory settings',()=>{
  let effects=0;const ctx={get:()=>undefined,effect:()=>{effects++}}
  apply(ctx,Config({enabled:true}));assert.equal(effects,1)
- assert.throws(()=>apply(ctx,Config({enabled:true,intentEnabled:true})),/classifier is unavailable/)
  assert.throws(()=>new QuotePolicy(Config({enabled:true,intentEnabled:true,maxScopes:100000,maxContextMessages:100,maxContextChars:4096})),/memory ceiling/)
+})
+test('intent routing follows classifier service lifetime regardless of startup order',async t=>{
+ const ctx=new Context(),policy=ctx.plugin({name:'intent-order-policy',apply(ctx){apply(ctx,Config({enabled:true,intentEnabled:true}))}})
+ await policy.await();t.after(()=>policy.dispose());assert.ok(ctx.get('qqTurnPolicy'))
+ const provider=ctx.plugin({name:'intent-order-provider',apply(ctx){ctx.effect(()=>ctx.provide('qqTurnIntent',{async classify(){return'reply'}}))}})
+ await provider.await();t.after(()=>provider.dispose())
+ for(let i=0;i<100&&!ctx.get('qqTurnIntent');i++)await delay(2)
+ assert.ok(ctx.get('qqTurnIntent'));const installed=ctx.get('qqTurnPolicy'),input=message('lifetime','g','a','test'),signal=new AbortController().signal
+ installed.seen(input);assert.equal(await installed.decide(input,signal),'reply');installed.observe(input,result('accepted'))
+ await provider.dispose()
+ for(let i=0;i<100&&ctx.get('qqTurnIntent');i++)await delay(2)
+ assert.equal(ctx.get('qqTurnIntent'),undefined);assert.equal(ctx.get('qqTurnPolicy'),installed)
+ await assert.rejects(installed.decide(input,signal),/classifier is unavailable/)
+ const quoted=message('lifetime-quote','g','b','quoted',{parts:[{type:'reply',messageId:ident('message','reply')}]});assert.equal(await installed.decide(quoted,signal),'reply')
 })
