@@ -62,4 +62,4 @@ jobs:
       - run: node scripts/release-inputs.mjs
       - run: npx --no-install playwright install --with-deps chromium
       - run: npm pack --pack-destination artifacts
-      - run: npm run test:web -- --im-kit-archive .test-artifacts/release-inputs/dsh-im-kit-0.2.1.tgz --chat-archive .test-artifacts/release-inputs/dsh-qq-chat-0.2.1.tgz
+      - run: npm run test:web -- --im-kit-archive .test-artifacts/release-inputs/dsh-im-kit-0.2.1.tgz --chat-archive .test-artifacts/release-inputs/dsh-qq-chat-0.2.1.tgz --browser-cache .test-artifacts/browsers
