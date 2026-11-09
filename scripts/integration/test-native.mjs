@@ -61,7 +61,7 @@ async function run(argv,cwd){
  if(failure)throw failure;assert.equal(deadline.aborted,false,'Setup timed out');assert.equal(signal,null);assert.equal(code,0,stderr.slice(-1400));return stdout
 }
 if(!resumed){const composition=await run([dsh,'--profile',profile,'--from-default-profile','sdk','--dump-config'],area);assert.ok(!composition.includes('@deepseek-ai/dsh-agent-preset-registry'),'SDK template now supplies a registry; update the fixture explicitly')}
-const profileManifest=JSON.parse(await readFile(join(profileRoot,'package.json'),'utf8'));profileManifest.pnpm={...profileManifest.pnpm,overrides:manifest.overrides};await writeFile(join(profileRoot,'package.json'),JSON.stringify(profileManifest,null,2)+'\n')
+const profileManifest=JSON.parse(await readFile(join(profileRoot,'package.json'),'utf8'));profileManifest.pnpm={...profileManifest.pnpm,overrides:{...manifest.overrides,...args.includes('--candidate-inputs')?{'dsh-im-kit':'file:'+archives[0].path,'dsh-qq-chat':'file:'+archives[1].path}:{}}};await writeFile(join(profileRoot,'package.json'),JSON.stringify(profileManifest,null,2)+'\n')
 await writeFile(join(profileRoot,'.npmrc'),'package-import-method=copy\nstore-dir='+join(root,'.test-artifacts','pnpm-store').replaceAll('\\','/')+'\ncache-dir='+join(root,'.test-artifacts','pnpm-cache').replaceAll('\\','/')+'\n')
 const pnpm=await pnpmScript(root)
 const peerNames=['@deepseek-ai/cordis@~4.1.0','@deepseek-ai/cordis-plugin-loader@~1.1.0','@deepseek-ai/schemastery@~3.19.0',...['agent','agent-preset-registry','app-boot','brand','llm','session','session-persistence','tools','scope','config-editor','typert-protocol','llm-deepseek-api-key','client-connection'].map(name=>'@deepseek-ai/dsh-'+name+'@0.2.2-rc.1')]
@@ -85,7 +85,7 @@ const exit=once(child,'close').then(([code,signal])=>{exitCode=code;return{code,
 try{
  const deadline=Date.now()+90000
  while(Date.now()<deadline){try{result=JSON.parse(await readFile(join(attempt,'result.json'),'utf8'));break}catch(error){if(error.code!=='ENOENT')throw error}assert.equal(exitCode,undefined,'Native DSH exited before the routing probe');await delay(30)}
- assert.ok(result,'Native routing probe timed out');assert.equal(result.passed,true,JSON.stringify(result.error));assert.equal(captures.length,12)
+ assert.ok(result,'Native routing probe timed out');assert.equal(result.passed,true,JSON.stringify(result.error));assert.equal(captures.length,15)
  assert.ok(JSON.stringify(captures[1].messages).includes('FIRST'));assert.ok(JSON.stringify(captures[1].messages).includes('LAB_REPLY_1'))
  assert.ok(!JSON.stringify(captures[2].messages).includes('FIRST'),'Conversation history crossed groups')
  child.stdin.write(JSON.stringify({jsonrpc:'2.0',id:1,method:'shutdown',params:{}})+'\n')
@@ -102,7 +102,7 @@ try{
  const restored=names(parse(await run([dsh,'--profile',profile,'--dump-config'],area),yamlOptions));assert.ok(restored.includes('dsh-qq-turn-control')&&restored.includes('dsh-qq-turn-control/control'))
  assert.equal(await digest(),original,'Reinstallation changed retained Chat receipts')
  result.checks.push('native-cli-remove-and-reinstall-retain-chat-journal')
- await writeFile(join(attempt,'summary.json'),JSON.stringify({passed:true,checks:result.checks,archives:archives.map(({name,sha256})=>({name,sha256})),installedFiles,nativeAdapterRequests:captures.length,normalShutdown:true,realQqMessagesSent:0,realModelApiRequests:0,semanticQualityVerified:false},null,2)+'\n')
+ await writeFile(join(attempt,'summary.json'),JSON.stringify({passed:true,dependencyResolution:args.includes('--candidate-inputs')?'candidate-archive-overrides':'public-manifest',checks:result.checks,archives:archives.map(({name,sha256})=>({name,sha256})),installedFiles,nativeAdapterRequests:captures.length,normalShutdown:true,realQqMessagesSent:0,realModelApiRequests:0,semanticQualityVerified:false},null,2)+'\n')
  console.log(JSON.stringify({area,attempt,passed:true,checks:result.checks,nativeAdapterRequests:captures.length,realQqMessagesSent:0}))
 }finally{
  if(exitCode===undefined){child.stdin.end();const fallback=setTimeout(()=>child.kill(),5000);await exit;clearTimeout(fallback)}

@@ -9,6 +9,7 @@ function source(name,sender='alice',directed=false,parts=[],peer='one'){return{s
 const quote=name=>({type:'reply',messageId:id('message',name)})
 const result=(name,text)=>({status:'responded',modelOutcome:'completed',reply:text,receipt:{status:'accepted',messageIds:[id('message',name)]}})
 const signal=new AbortController().signal
+async function route(policy,input){const decision=await policy.decide(input,signal);return decision==='reply'&&!policy.allowReply(input)?'ignore':decision}
 function say(name,text,sender){const value=source(name,sender);value.parts[0].text=text;return value}
 
 test('known quote targets and bot answer recipients use local aliases without leaking IDs',()=>{
@@ -31,19 +32,19 @@ test('reply to another member never invokes a classifier even directly after a b
  const p=new QuotePolicy(Config({enabled:true,intentEnabled:true}),()=>1,()=>({async classify(){calls++;return'reply'}}))
  const a=source('a'),c=source('c','carol');p.seen(a);p.observe(a,result('answer','A bot answer'));p.seen(c)
  const b=source('b','bob',false,[quote('c')]);p.seen(b)
- assert.equal(await p.decide(b,signal),'ignore');assert.equal(calls,0)
+ assert.equal(await route(p,b),'ignore');assert.equal(calls,0)
  const mention=source('mention','dave',false,[{type:'mention',userId:id('user','carol')}]);p.seen(mention)
- assert.equal(await p.decide(mention,signal),'ignore');assert.equal(calls,0);await p.close()
+ assert.equal(await route(p,mention),'ignore');assert.equal(calls,0);await p.close()
 })
 test('parallel ambient classifications cannot exceed one group reservation and explicit humans still pass',async()=>{
  let now=1,enter,release,arrived=0;const entered=new Promise(resolve=>enter=resolve),gate=new Promise(resolve=>release=resolve)
  const p=new QuotePolicy(Config({enabled:true,intentEnabled:true,maxAmbientReplies:2,minAmbientGapMs:0}),()=>now,()=>({async classify(){if(++arrived===15)enter();await gate;return'reply'}}))
  const values=Array.from({length:15},(_,i)=>source('parallel-'+i,'member-'+i));for(const v of values)p.seen(v)
- const pending=values.map(v=>p.decide(v,signal));await entered;release();const answers=await Promise.all(pending)
+ const pending=values.map(v=>route(p,v));await entered;release();const answers=await Promise.all(pending)
  assert.equal(answers.filter(x=>x==='reply').length,2);assert.equal(answers.filter(x=>x==='ignore').length,13)
- const explicit=source('explicit','member-14',true);assert.equal(p.guard(explicit),'allow');assert.equal(await p.decide(explicit,signal),'default')
- p.observe(explicit,result('quoted-answer','Answer'));const quoted=source('quote-human','member-13',false,[quote('quoted-answer')]);assert.equal(await p.decide(quoted,signal),'reply')
- now+=60000;const renewed=source('renewed');p.seen(renewed);assert.equal(await p.decide(renewed,signal),'reply');await p.close()
+ const explicit=source('explicit','member-14',true);assert.equal(p.guard(explicit),'allow');assert.equal(await route(p,explicit),'default')
+ p.observe(explicit,result('quoted-answer','Answer'));const quoted=source('quote-human','member-13',false,[quote('quoted-answer')]);assert.equal(await route(p,quoted),'reply')
+ now+=60000;const renewed=source('renewed');p.seen(renewed);assert.equal(await route(p,renewed),'reply');await p.close()
 })
 test('known bots have independent sender and group ceilings; ordinary text cannot impersonate a known identity',()=>{
  let now=1;const p=new QuotePolicy(Config({enabled:true,botIds:['bot-a','bot-b'],maxBotReplies:2,maxBotGroupReplies:3}),()=>now)
@@ -61,15 +62,21 @@ for(const variant of ['busy-room','interrupted-topic','bot-loop'])test('15-perso
  let now=1,decisions=0;const p=new QuotePolicy(Config({enabled:true,intentEnabled:true,maxContextMessages:64,botIds:['robot-1','robot-2'],minAmbientGapMs:8000}),()=>now,()=>({async classify(request){decisions++;return request.candidate.text==='I disagree with your answer'?'reply':request.candidate.text==='unclear'?'default':'ignore'}}))
  // This is a routing oracle, not a model intelligence or language-quality benchmark.
  let ambientReplies=0;for(let i=0;i<15;i++){
-  const chat=source('member-side-chat-'+i,'member-'+i);p.seen(chat);assert.equal(await p.decide(chat,signal),'ignore')
+  const chat=source('member-side-chat-'+i,'member-'+i);p.seen(chat);assert.equal(await route(p,chat),'ignore')
  }
- const a=source('What do you think?','member-0',true);p.seen(a);assert.equal(p.guard(a),'allow');assert.equal(await p.decide(a,signal),'default');p.observe(a,result('bot-answer','The proposal seems useful'))
- if(variant==='interrupted-topic'){const aside=source('side discussion','member-9');p.seen(aside);assert.equal(await p.decide(aside,signal),'ignore')}
- const b=say('b-challenge','I disagree with your answer','member-14');p.seen(b);assert.equal(await p.decide(b,signal),'reply');ambientReplies++
- const repeated=say('c-challenge','I disagree with your answer','member-13');p.seen(repeated);assert.equal(await p.decide(repeated,signal),'ignore')
- const toC=source('to-carol','member-12',false,[{type:'mention',userId:id('user','member-11')}]);p.seen(toC);assert.equal(await p.decide(toC,signal),'ignore')
- const uncertain=source('unclear','member-7');p.seen(uncertain);assert.equal(await p.decide(uncertain,signal),'ignore')
+ const a=source('What do you think?','member-0',true);p.seen(a);assert.equal(p.guard(a),'allow');assert.equal(await route(p,a),'default');p.observe(a,result('bot-answer','The proposal seems useful'))
+ if(variant==='interrupted-topic'){const aside=source('side discussion','member-9');p.seen(aside);assert.equal(await route(p,aside),'ignore')}
+ const b=say('b-challenge','I disagree with your answer','member-14');p.seen(b);assert.equal(await route(p,b),'reply');ambientReplies++
+ const repeated=say('c-challenge','I disagree with your answer','member-13');p.seen(repeated);assert.equal(await route(p,repeated),'ignore')
+ const toC=source('to-carol','member-12',false,[{type:'mention',userId:id('user','member-11')}]);p.seen(toC);assert.equal(await route(p,toC),'ignore')
+ const uncertain=source('unclear','member-7');p.seen(uncertain);assert.equal(await route(p,uncertain),'ignore')
  if(variant==='bot-loop'){for(let i=0;i<15;i++)assert.equal(p.guard(source('robot-directed-'+i,'robot-1',true)),i<3?'allow':'block')}
- now+=8000;const again=say('later-challenge','I disagree with your answer','member-6');p.seen(again);assert.equal(await p.decide(again,signal),'reply');ambientReplies++
+ now+=8000;const again=say('later-challenge','I disagree with your answer','member-6');p.seen(again);assert.equal(await route(p,again),'reply');ambientReplies++
  assert.equal(ambientReplies,2);assert.ok(decisions>=19);await p.close()
+})
+
+test('ordinary built-in followups use the same final budget when intent is disabled',async()=>{
+ const p=new QuotePolicy(Config({enabled:true,intentEnabled:false,maxAmbientReplies:1,minAmbientGapMs:0}),()=>1)
+ const first=source('first');assert.equal(await p.decide(first,signal),'default');assert.equal(p.allowReply(first),true);assert.equal(p.allowReply(source('second')),false)
+ assert.equal(p.allowReply(source('human-explicit','alice',true)),true);p.observe(first,result('known-answer','Answer'));assert.equal(p.allowReply(source('quoted','bob',false,[quote('known-answer')])),true);await p.close()
 })

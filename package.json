@@ -113,7 +113,7 @@
   "dependencies": {
     "zod": "4.6.6",
     "dsh-im-kit": "https://github.com/Soldsix/dsh-im-kit/releases/download/v0.2.1/dsh-im-kit-0.2.1.tgz",
-    "dsh-qq-chat": "https://github.com/Soldsix/dsh-qq-chat/releases/download/v0.2.2/dsh-qq-chat-0.2.2.tgz"
+    "dsh-qq-chat": "https://github.com/Soldsix/dsh-qq-chat/releases/download/v0.2.3/dsh-qq-chat-0.2.3.tgz"
   },
   "repository": {
     "type": "git",

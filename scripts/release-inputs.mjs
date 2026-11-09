@@ -4,7 +4,7 @@ import {createHash} from 'node:crypto'
 import {mkdir,readFile,writeFile} from 'node:fs/promises'
 import {fileURLToPath} from 'node:url'
 const directory=new URL('../.test-artifacts/release-inputs/',import.meta.url);await mkdir(directory,{recursive:true})
-const inputs=[['dsh-im-kit','0.2.1','48686023b7307e3296d403994ad5cfb5cc7bfa7e4be5ef423af934b5286c40f0'],['dsh-qq-chat','0.2.2','e9de0477cbdb8d30bf28ba9e485bf1f734e75843f4d940b8b51991b2c5082fa0']]
+const inputs=[['dsh-im-kit','0.2.1','48686023b7307e3296d403994ad5cfb5cc7bfa7e4be5ef423af934b5286c40f0'],['dsh-qq-chat','0.2.3','7e0b13f702f1d05e2d90c66a9939ea2e23e7111dfa474666ceef0a39e6d5ef42']]
 for(const [name,version,sha256] of inputs){
  const target=new URL(name+'-'+version+'.tgz',directory);let bytes
  try{bytes=await readFile(target)}catch(error){if(error.code!=='ENOENT')throw error;const response=await fetch('https://github.com/Soldsix/'+name+'/releases/download/v'+version+'/'+name+'-'+version+'.tgz',{signal:AbortSignal.timeout(90000)});assert.equal(response.ok,true,'Public release input download failed');bytes=new Uint8Array(await response.arrayBuffer())}

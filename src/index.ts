@@ -39,6 +39,12 @@ export class QuotePolicy implements ChatTurnPolicy{
   if(input.scope.kind!=='group'||!this.botIds.has(input.senderId))return'allow'
   return(input.directedToBot||this.quoted(input))&&this.budget.reserve(input,'bot')?'allow':'block'
  }
+ /** @param input - source actually selected for a reply by Chat, including its basic same-sender trigger. @returns one synchronous reservation for an automatic human continuation; explicit humans, known quotes and already guarded bot attempts bypass this budget. */
+ allowReply(input:InboundMessage):boolean{
+  if(this.lifetime.signal.aborted)return false
+  if(input.scope.kind!=='group'||input.directedToBot||this.botIds.has(input.senderId)||this.quoted(input))return true
+  return this.budget.reserve(input,'ambient')
+ }
  private quoted(input:InboundMessage):boolean{
   const targets=input.parts.filter(part=>part.type==='reply'),saved=this.scopes.get(scopeKey(input.scope))??[],now=this.clock()
   return targets.length===1&&saved.some(reply=>reply.id===targets[0]!.messageId&&now>=reply.time&&now-reply.time<=this.config.quoteWindowMs)
@@ -58,7 +64,6 @@ export class QuotePolicy implements ChatTurnPolicy{
   const task=Promise.resolve().then(()=>{combined.throwIfAborted();return classifier.classify(request,combined)})
   this.pending.add(task);void task.then(()=>this.pending.delete(task),()=>this.pending.delete(task))
   const decision=await task;combined.throwIfAborted()
-  if(decision==='reply')return this.budget.reserve(input,'ambient')?'reply':'ignore'
   return decision==='default'?'ignore':decision
  }
  /** @param input - original source. @param result - actual model and delivery outcome. */

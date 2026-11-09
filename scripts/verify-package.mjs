@@ -12,7 +12,7 @@ import {parse} from 'yaml'
  */
 export function verifyManifest(manifest){
  assert.equal(manifest.name,'dsh-qq-turn-control');assert.equal(manifest.type,'module');assert.equal(manifest.license,'MIT');assert.ok(!manifest.bin)
- assert.equal(manifest.engines?.dsh,'0.2.2-rc.1');assert.equal(manifest.dependencies?.['dsh-im-kit'],'https://github.com/Soldsix/dsh-im-kit/releases/download/v0.2.1/dsh-im-kit-0.2.1.tgz');assert.equal(manifest.dependencies?.['dsh-qq-chat'],'https://github.com/Soldsix/dsh-qq-chat/releases/download/v0.2.2/dsh-qq-chat-0.2.2.tgz');assert.equal(manifest.dsh?.bundle?.patch,'./cordis.patch.yml')
+ assert.equal(manifest.engines?.dsh,'0.2.2-rc.1');assert.equal(manifest.dependencies?.['dsh-im-kit'],'https://github.com/Soldsix/dsh-im-kit/releases/download/v0.2.1/dsh-im-kit-0.2.1.tgz');assert.equal(manifest.dependencies?.['dsh-qq-chat'],'https://github.com/Soldsix/dsh-qq-chat/releases/download/v0.2.3/dsh-qq-chat-0.2.3.tgz');assert.equal(manifest.dsh?.bundle?.patch,'./cordis.patch.yml')
  assert.equal(manifest.exports?.['.']?.import,'./dist/index.js');assert.equal(manifest.exports?.['./control']?.import,'./dist/control.js');assert.equal(manifest.exports?.['./client']?.default,'./dist/client.js');assert.equal(manifest.dsh?.client?.platform,'web')
  for(const section of ['dependencies','peerDependencies','devDependencies'])for(const [key,value]of Object.entries(manifest[section]??{}))assert.ok(!/^(?:file:|link:|workspace:|[a-z]:[\\/]|[\\/])/i.test(value),'Nonportable dependency '+key)
 }
