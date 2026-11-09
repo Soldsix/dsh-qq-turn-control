@@ -1,5 +1,7 @@
 /** Install independent archives in a fresh SDK profile and test the real native Chat path. */
 import assert from 'node:assert/strict'
+import {pnpmScript} from './pnpm.mjs'
+import {requiredProfilePeers} from './profile-peers.mjs'
 import {spawn} from 'node:child_process'
 import {once} from 'node:events'
 import {createServer} from 'node:http'
@@ -44,7 +46,8 @@ const server=createServer(async(request,response)=>{
  }catch(error){if(!closed.signal.aborted)response.destroy(error)}finally{active--;if(current==='LAB_HOLD')holds--}
 })
 server.listen(0,'127.0.0.1');await once(server,'listening');server.unref()
-const env=Object.fromEntries(Object.entries(process.env).filter(([key])=>!/KEY|SECRET|TOKEN|PASSWORD/i.test(key)))
+const env=Object.fromEntries(Object.entries(process.env).filter(([key])=>!/KEY|SECRET|TOKEN|PASSWORD|^NPM_CONFIG_CACHE$/i.test(key)))
+env.NPM_CONFIG_CACHE=join(root,'.npm-cache')
 await mkdir(join(attempt,'temp'),{recursive:true})
 Object.assign(env,{DSH_HOME:home,TEMP:join(attempt,'temp'),TMP:join(attempt,'temp'),DSH_PRIMARY_RUNTIME:'',DSH_SYSTEM_PROMPT:'Synthetic local Lab acceptance. No private persona or skills.',DEEPSEEK_API_KEY:'synthetic-loopback-only',DEEPSEEK_BASE_URL:'http://127.0.0.1:'+server.address().port+'/anthropic'})
 const dsh=join(root,'node_modules','@deepseek-ai','dsh','lib','bin.js'),commands=[]
@@ -59,14 +62,14 @@ async function run(argv,cwd){
 if(!resumed){const composition=await run([dsh,'--profile',profile,'--from-default-profile','sdk','--dump-config'],area);assert.ok(!composition.includes('@deepseek-ai/dsh-agent-preset-registry'),'SDK template now supplies a registry; update the fixture explicitly')}
 const profileManifest=JSON.parse(await readFile(join(profileRoot,'package.json'),'utf8'));profileManifest.pnpm={...profileManifest.pnpm,overrides:manifest.overrides};await writeFile(join(profileRoot,'package.json'),JSON.stringify(profileManifest,null,2)+'\n')
 await writeFile(join(profileRoot,'.npmrc'),'package-import-method=copy\nstore-dir='+join(root,'.test-artifacts','pnpm-store').replaceAll('\\','/')+'\ncache-dir='+join(root,'.test-artifacts','pnpm-cache').replaceAll('\\','/')+'\n')
-let pnpm
-find:for(const directory of(process.env.PATH??'').split(delimiter))for(const candidate of[join(directory,'pnpm.cjs'),join(directory,'node_modules','pnpm','bin','pnpm.cjs'),join(directory,'node_modules','corepack','dist','pnpm.js')]){try{await realpath(candidate);pnpm=candidate;break find}catch(error){if(error.code!=='ENOENT')throw error}}
-assert.ok(pnpm,'pnpm is required')
+const pnpm=await pnpmScript(root)
 const peerNames=['@deepseek-ai/cordis@~4.1.0','@deepseek-ai/cordis-plugin-loader@~1.1.0','@deepseek-ai/schemastery@~3.19.0',...['agent','agent-preset-registry','app-boot','brand','llm','session','session-persistence','tools','scope','config-editor','typert-protocol','llm-deepseek-api-key','client-connection'].map(name=>'@deepseek-ai/dsh-'+name+'@0.2.2-rc.1')]
 await run([pnpm,'add',archives[0].path,'@deepseek-ai/dsh@0.2.2-rc.1',...peerNames,'--ignore-scripts'],profileRoot)
 await run([dsh,'plugin','--profile',profile,'add',archives[1].path],area);await run([dsh,'plugin','--profile',profile,'add',archives[2].path],area)
+for(;;){const missing=await requiredProfilePeers(profileRoot);if(!missing.length)break;await run([pnpm,'add',...missing,'--ignore-scripts'],profileRoot)}
 const installedFiles={chat:await verifyInstalledArchive(archives[1].path,join(profileRoot,'node_modules','dsh-qq-chat'),join(attempt,'chat-installed-files.json')),turn:await verifyInstalledArchive(archives[2].path,join(profileRoot,'node_modules','dsh-qq-turn-control'),join(attempt,'turn-installed-files.json'))}
-const fixture=name=>pathToFileURL(fileURLToPath(new URL('./'+name,import.meta.url))).href
+for(const name of ['native-transport.mjs','native-probe.mjs'])await copyFile(fileURLToPath(new URL('./'+name,import.meta.url)),join(profileRoot,name))
+const fixture=name=>pathToFileURL(join(profileRoot,name)).href
 const overlay=[
  {id:'qq-turn-control',config:{enabled:true}},
  {id:'qq-chat-runtime',config:{enabled:true,trigger:'directed',namespace:'turn-'+basename(attempt).toLowerCase(),databasePath:join(attempt,'chat.sqlite3'),workspacePath:join(attempt,'workspace'),presetId:'turn-test-preset',provider:'deepseek-official',model:'deepseek-flash',reasoningEffort:'off',maxTokens:128}},

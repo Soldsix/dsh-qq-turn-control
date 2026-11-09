@@ -16,7 +16,8 @@ const owned=relative(runs,area);assert.ok(!owned.startsWith('..')&&!isAbsolute(o
 const attempt=await mkdtemp(join(area,'attempt-')),archives=[]
 for(const path of[library,chat,join(root,'artifacts',manifest.name+'-'+manifest.version+'.tgz')]){const target=join(attempt,basename(path));await copyFile(path,target);archives.push(target)}
 if(!resumed)await writeFile(join(area,'package.json'),JSON.stringify({name:'isolated-turn-control-consumer',private:true,type:'module',overrides:manifest.overrides},null,2)+'\n')
-const env=Object.fromEntries(Object.entries(process.env).filter(([key])=>!/KEY|SECRET|TOKEN|PASSWORD/i.test(key)))
+const env=Object.fromEntries(Object.entries(process.env).filter(([key])=>!/KEY|SECRET|TOKEN|PASSWORD|^NPM_CONFIG_CACHE$/i.test(key)))
+env.NPM_CONFIG_CACHE=join(root,'.npm-cache')
 await mkdir(join(attempt,'temp'),{recursive:true});Object.assign(env,{TEMP:join(attempt,'temp'),TMP:join(attempt,'temp')})
 const records=[]
 async function run(argv){

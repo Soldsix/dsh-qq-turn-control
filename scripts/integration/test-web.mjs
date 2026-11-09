@@ -1,5 +1,7 @@
 /** Install independent archives in a fresh SDK profile and test the real native Chat path. */
 import assert from 'node:assert/strict'
+import {pnpmScript} from './pnpm.mjs'
+import {requiredProfilePeers} from './profile-peers.mjs'
 import {spawn} from 'node:child_process'
 import {once} from 'node:events'
 import {createServer} from 'node:http'
@@ -44,7 +46,8 @@ const server=createServer(async(request,response)=>{
  }catch(error){if(!closed.signal.aborted)response.destroy(error)}finally{active--;if(current==='LAB_HOLD')holds--}
 })
 server.listen(0,'127.0.0.1');await once(server,'listening');server.unref()
-const env=Object.fromEntries(Object.entries(process.env).filter(([key])=>!/KEY|SECRET|TOKEN|PASSWORD/i.test(key)))
+const env=Object.fromEntries(Object.entries(process.env).filter(([key])=>!/KEY|SECRET|TOKEN|PASSWORD|^NPM_CONFIG_CACHE$/i.test(key)))
+env.NPM_CONFIG_CACHE=join(root,'.npm-cache')
 await mkdir(join(attempt,'temp'),{recursive:true})
 Object.assign(env,{DSH_HOME:home,TEMP:join(attempt,'temp'),TMP:join(attempt,'temp'),DSH_PRIMARY_RUNTIME:'',DSH_SYSTEM_PROMPT:'Synthetic local Lab acceptance. No private persona or skills.',DEEPSEEK_API_KEY:'synthetic-loopback-only',DEEPSEEK_BASE_URL:'http://127.0.0.1:'+server.address().port+'/anthropic'})
 const dsh=join(root,'node_modules','@deepseek-ai','dsh','lib','bin.js'),commands=[]
@@ -59,12 +62,11 @@ async function run(argv,cwd){
 if(!resumed)await run([dsh,'--profile',profile,'--from-default-profile','web','--dump-config'],area)
 const profileManifest=JSON.parse(await readFile(join(profileRoot,'package.json'),'utf8'));profileManifest.pnpm={...profileManifest.pnpm,overrides:manifest.overrides};await writeFile(join(profileRoot,'package.json'),JSON.stringify(profileManifest,null,2)+'\n')
 await writeFile(join(profileRoot,'.npmrc'),'package-import-method=copy\nstore-dir='+join(root,'.test-artifacts','pnpm-store').replaceAll('\\','/')+'\ncache-dir='+join(root,'.test-artifacts','pnpm-cache').replaceAll('\\','/')+'\n')
-let pnpm
-find:for(const directory of(process.env.PATH??'').split(delimiter))for(const candidate of[join(directory,'pnpm.cjs'),join(directory,'node_modules','pnpm','bin','pnpm.cjs'),join(directory,'node_modules','corepack','dist','pnpm.js')]){try{await realpath(candidate);pnpm=candidate;break find}catch(error){if(error.code!=='ENOENT')throw error}}
-assert.ok(pnpm,'pnpm is required')
+const pnpm=await pnpmScript(root)
 const peerNames=['@deepseek-ai/cordis@~4.1.0','@deepseek-ai/cordis-plugin-loader@~1.1.0','@deepseek-ai/schemastery@~3.19.0',...['agent','agent-preset-registry','app-boot','brand','llm','session','session-persistence','tools','scope','config-editor','typert-protocol','llm-deepseek-api-key','client-connection'].map(name=>'@deepseek-ai/dsh-'+name+'@0.2.2-rc.1')]
 await run([pnpm,'add',archives[0].path,'@deepseek-ai/dsh@0.2.2-rc.1',...peerNames,'--ignore-scripts'],profileRoot)
 await run([dsh,'plugin','--profile',profile,'add',archives[1].path],area);await run([dsh,'plugin','--profile',profile,'add',archives[2].path],area)
+for(;;){const missing=await requiredProfilePeers(profileRoot);if(!missing.length)break;await run([pnpm,'add',...missing,'--ignore-scripts'],profileRoot)}
 const installedFiles={chat:await verifyInstalledArchive(archives[1].path,join(profileRoot,'node_modules','dsh-qq-chat'),join(attempt,'chat-installed-files.json')),turn:await verifyInstalledArchive(archives[2].path,join(profileRoot,'node_modules','dsh-qq-turn-control'),join(attempt,'turn-installed-files.json'))}
 const browserIndex=args.indexOf('--browser-cache');assert.ok(browserIndex>=0&&args[browserIndex+1],'Required --browser-cache')
 process.env.PLAYWRIGHT_BROWSERS_PATH=await realpath(args[browserIndex+1]);const {chromium}=await import('playwright')
@@ -84,11 +86,10 @@ try{
  await form.getByRole('switch',{name:/启用接话|Enable routing/}).click();await form.getByRole('button',{name:/^保存$|^Save$/}).click();await form.getByText(/^策略已启用$|^Policy active$/).waitFor();checks.push('native-save-enables-policy')
  await form.getByText(/意图分类器未注册|Intent classifier not registered/).waitFor();await form.getByRole('switch',{name:/启用意图分类器|Enable intent classifier/}).click();await form.getByRole('button',{name:/^保存$|^Save$/}).click();await page.getByText(/请先安装并启用意图分类器|Install and enable an intent classifier first/).waitFor();await form.getByRole('button',{name:/^放弃修改$|^Discard$/}).click();checks.push('missing-intent-provider-rejected-without-saving')
  const scopes=form.getByLabel(/^最多记录会话数$|^Maximum conversations$/);await scopes.fill('0');await form.getByRole('button',{name:/^保存$|^Save$/}).click();await page.getByText(/^请检查设置值$|^Check the settings values$/).waitFor();assert.equal(await scopes.inputValue(),'0');await form.getByRole('button',{name:/放弃修改|Discard/}).click();checks.push('invalid-save-retains-draft')
- await scopes.fill('31');await form.getByRole('button',{name:/^刷新$|^Refresh$/}).click();await form.getByText(/有未保存的修改|Unsaved changes/).waitFor();assert.equal(await scopes.inputValue(),'31');await form.getByRole('button',{name:/^保存$|^Save$/}).click();await page.getByText(/^接话设置已保存$|^Routing settings saved$/).waitFor();checks.push('polling-retains-draft-and-valid-settings-save')
+ const changedScopes=(await scopes.inputValue())==='31'?'32':'31';await scopes.fill(changedScopes);await form.getByRole('button',{name:/^刷新$|^Refresh$/}).click();await form.getByText(/有未保存的修改|Unsaved changes/).waitFor();assert.equal(await scopes.inputValue(),changedScopes);await form.getByRole('button',{name:/^保存$|^Save$/}).click();await page.getByText(/^接话设置已保存$|^Routing settings saved$/).waitFor();await form.getByText(/有未保存的修改|Unsaved changes/).waitFor({state:'hidden'});checks.push('polling-retains-draft-and-valid-settings-save')
  await page.setViewportSize({width:1280,height:1000});await form.evaluate(element=>element.scrollIntoView({block:'start'}));await page.screenshot({path:join(attempt,'light.png'),fullPage:true});await page.emulateMedia({colorScheme:'dark'});await page.screenshot({path:join(attempt,'dark.png'),fullPage:true});await page.getByRole('button',{name:/^收起侧边栏$|^Collapse sidebar$/}).click();await page.setViewportSize({width:520,height:1000});await form.evaluate(element=>element.scrollIntoView({block:'start'}));assert.ok(await form.evaluate(element=>element.scrollWidth<=element.clientWidth+2));assert.ok(await form.evaluate(element=>[...element.querySelectorAll('input')].filter(item=>item.getClientRects().length).every(item=>{const rect=item.getBoundingClientRect();return rect.left>=0&&rect.right<=innerWidth})));await page.screenshot({path:join(attempt,'narrow.png'),fullPage:true});checks.push('light-dark-and-narrow-layout')
- await page.setViewportSize({width:1280,height:1000});await page.getByRole('button',{name:/^打开侧边栏$|^Open sidebar$/}).click();await page.reload({waitUntil:'domcontentloaded'});await open();await form.getByText(/^策略已启用$|^Policy active$/).waitFor();assert.equal(await scopes.inputValue(),'31');await form.getByRole('switch',{name:/启用接话|Enable routing/}).click();await form.getByRole('button',{name:/^保存$|^Save$/}).click();await form.getByText(/^策略未启用$|^Policy inactive$/).waitFor();checks.push('settings-survive-browser-reload-and-policy-disables')
+ await page.setViewportSize({width:1280,height:1000});await page.getByRole('button',{name:/^打开侧边栏$|^Open sidebar$/}).click();await page.reload({waitUntil:'domcontentloaded'});await open();await form.getByText(/^策略已启用$|^Policy active$/).waitFor();assert.equal(await scopes.inputValue(),changedScopes);await form.getByRole('switch',{name:/启用接话|Enable routing/}).click();await form.getByRole('button',{name:/^保存$|^Save$/}).click();await form.getByText(/^策略未启用$|^Policy inactive$/).waitFor();checks.push('settings-survive-browser-reload-and-policy-disables')
  assert.deepEqual(errors,[]);assert.deepEqual(consoleErrors,[]);assert.equal(captures.length,0)
  await writeFile(join(attempt,'summary.json'),JSON.stringify({passed:true,checks,installedFiles,archives:archives.map(({name,sha256})=>({name,sha256})),clientErrors:errors,consoleErrors,realQqMessagesSent:0,realModelApiRequests:0},null,2)+'\n');console.log(JSON.stringify({area,attempt,passed:true,checks,realQqMessagesSent:0}))
 }catch(error){if(page)await page.screenshot({path:join(attempt,'failure.png'),fullPage:true}).catch(()=>{});await writeFile(join(attempt,'result.json'),JSON.stringify({passed:false,checks,error:{message:error.message,stack:error.stack},clientErrors:errors,consoleErrors},null,2)+'\n');throw error}
 finally{await context?.close();if(exitCode===undefined){child.kill('SIGINT');const fallback=setTimeout(()=>child.kill(),5000);await exit;clearTimeout(fallback)}server.closeAllConnections();await new Promise(resolve=>server.close(resolve));await writeFile(join(attempt,'process.json'),JSON.stringify({exitCode,stdoutBytes:Buffer.byteLength(stdout),stderrBytes:Buffer.byteLength(stderr),rawProcessOutputPersisted:false},null,2)+'\n')}
-const fixture=name=>pathToFileURL(fileURLToPath(new URL('./'+name,import.meta.url))).href

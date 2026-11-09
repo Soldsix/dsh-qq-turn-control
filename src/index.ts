@@ -23,22 +23,29 @@ type Reply={readonly id:MessageId;readonly time:number}
 export class QuotePolicy implements ChatTurnPolicy{
  private readonly scopes=new Map<ScopeKey,Reply[]>()
  private readonly context:RecentContext|null
+ private readonly lifetime=new AbortController()
+ private readonly pending=new Set<Promise<'reply'|'ignore'|'default'>>()
+ private closing:Promise<void>|undefined
  /** @param config - parsed routing limits. @param clock - monotonic milliseconds. @param intent - current optional classifier provider. */
  constructor(private readonly config:Config,private readonly clock:()=>number=()=>performance.now(),private readonly intent:()=>TurnIntent|undefined=()=>undefined){validateConfig(config);this.context=config.intentEnabled?new RecentContext(config,clock):null}
  /** @param input - fresh admitted group source. */
- seen(input:InboundMessage):void{this.context?.seen(input)}
+ seen(input:InboundMessage):void{if(!this.lifetime.signal.aborted)this.context?.seen(input)}
  /** @param input - original normalized message. @param signal - caller cancellation. @returns quote match or the optional classifier's decision. */
  async decide(input:InboundMessage,signal:AbortSignal):Promise<'reply'|'ignore'|'default'>{
-  signal.throwIfAborted();if(input.scope.kind!=='group'||input.directedToBot)return'default'
+  signal.throwIfAborted();this.lifetime.signal.throwIfAborted();if(input.scope.kind!=='group'||input.directedToBot)return'default'
   const saved=this.scopes.get(scopeKey(input.scope))??[],now=this.clock()
   if(input.parts.some(part=>part.type==='reply'&&saved.some(reply=>reply.id===part.messageId&&now-reply.time<=this.config.quoteWindowMs&&now>=reply.time)))return'reply'
   const request=this.context?.request(input)
   if(!request)return'default'
   const classifier=this.intent();if(!classifier)throw new Error('Intent classifier is unavailable')
-  return classifier.classify(request,signal)
+  const combined=AbortSignal.any([signal,this.lifetime.signal])
+  const task=Promise.resolve().then(()=>{combined.throwIfAborted();return classifier.classify(request,combined)})
+  this.pending.add(task);void task.then(()=>this.pending.delete(task),()=>this.pending.delete(task))
+  const decision=await task;combined.throwIfAborted();return decision
  }
  /** @param input - original source. @param result - actual model and delivery outcome. */
  observe(input:InboundMessage,result:ChatResult):void{
+  if(this.lifetime.signal.aborted)return
   this.context?.observe(input,result)
   if(input.scope.kind!=='group'||result.status!=='responded'||result.modelOutcome!=='completed'||result.receipt?.status!=='accepted'||!result.receipt.messageIds.length)return
   const key=scopeKey(input.scope),now=this.clock(),saved=(this.scopes.get(key)??[]).filter(item=>now-item.time<=this.config.quoteWindowMs)
@@ -46,11 +53,20 @@ export class QuotePolicy implements ChatTurnPolicy{
   this.scopes.delete(key);this.scopes.set(key,saved.slice(-this.config.maxRepliesPerScope))
   while(this.scopes.size>this.config.maxScopes){const first=this.scopes.keys().next().value;if(first!==undefined)this.scopes.delete(first)}
  }
+ /** @returns completion after owned classifier decisions settle; new observations stop and new decisions fail immediately. */
+ close():Promise<void>{
+  if(this.closing)return this.closing
+  const settled=Promise.allSettled([...this.pending]);this.lifetime.abort();this.scopes.clear();this.context?.clear()
+  return this.closing=settled.then(()=>{})
+ }
 }
 /** @param ctx - DSH profile context. @param config - validated limits. */
 export function apply(ctx:Context,config:Config):void{
  if(!config.enabled)return
  validateConfig(config)
  if(ctx.get('qqTurnPolicy'))throw new Error('Another turn policy is already installed')
- ctx.effect(()=>ctx.provide('qqTurnPolicy',new QuotePolicy(config,()=>performance.now(),()=>ctx.get('qqTurnIntent'))))
+ ctx.effect(()=>{
+  const policy=new QuotePolicy(config,()=>performance.now(),()=>ctx.get('qqTurnIntent')),detach=ctx.provide('qqTurnPolicy',policy)
+  return async()=>{const closed=policy.close();await detach();await closed}
+ })
 }

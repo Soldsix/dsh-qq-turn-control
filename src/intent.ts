@@ -26,10 +26,13 @@ export class RecentContext{
  private readonly scopes=new Map<ScopeKey,Window>()
  /** @param limits - resolved profile limits. @param clock - monotonic milliseconds. */
  constructor(private readonly limits:ContextLimits,private readonly clock:()=>number=()=>performance.now()){}
+ /** Discard transient windows without changing durable Chat or classifier Session data. */
+ clear():void{this.scopes.clear()}
  private remember(key:ScopeKey,entry:Entry):void{
   const now=this.clock(),old=this.scopes.get(key),entries=(old?.entries??[]).filter(item=>now>=item.at&&now-item.at<=this.limits.contextWindowMs)
   if(entry.id!==null&&entries.some(item=>item.id===entry.id))return
-  entries.push(entry);this.scopes.delete(key);this.scopes.set(key,{id:old?.id??brandString<IntentContextId>(randomUUID()),entries:entries.slice(-this.limits.maxContextMessages)})
+  const id=old&&entries.length?old.id:brandString<IntentContextId>(randomUUID())
+  entries.push(entry);this.scopes.delete(key);this.scopes.set(key,{id,entries:entries.slice(-this.limits.maxContextMessages)})
   while(this.scopes.size>this.limits.maxScopes){const first=this.scopes.keys().next().value;if(first!==undefined)this.scopes.delete(first)}
  }
  /** @param input - fresh, admitted source. */

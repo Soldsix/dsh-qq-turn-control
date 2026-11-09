@@ -3,20 +3,23 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write README.md
 /:
-  en: ed44fa1617494fb0
-  zh: 2e8005b9131cec9c
+  en: cb3f91d54eee30e5
+  zh: cb3f91d54eee30e5
+/description-route-quoted-replies-to-accepted-bot-messages-in-the-same-conversation-kind-package-bundle:
+  en: c840cd05f74e8085
+  zh: 2f2a5c0ecc43a033
 /dsh-qq-turn-control:
   en: bb4615e12c638551
   zh: 8247c6341093f573
 /dsh-qq-turn-control/summary:
-  en: 8808955f99dfa059
-  zh: 6eaa4cdf449b07c1
+  en: d0ac55da23274603
+  zh: 73534d1036290e1e
 /dsh-qq-turn-control/table-of-contents:
-  en: 4084ff69643e0719
-  zh: 91070e8b485a01cb
+  en: 0f7dd0a844f483b1
+  zh: 49961dc4950e45a8
 /dsh-qq-turn-control/use-and-limits:
-  en: 0a71dc11071ed821
-  zh: 963eaea1bbeeb5b3
+  en: 5d82cbead6c4601e
+  zh: cd66ec2373615cb2
 /dsh-qq-turn-control/testing-and-privacy:
-  en: 1fb5d6c01995dbeb
-  zh: 48339d493a81a627
+  en: ca8ba0a2a7dda1d2
+  zh: 88787bf57574c7c4

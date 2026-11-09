@@ -4,7 +4,7 @@ import {identifier} from 'dsh-im-kit'
 import {Config,QuotePolicy,apply} from '../dist/index.js'
 import {RecentContext} from '../dist/intent.js'
 import {Context} from '@deepseek-ai/cordis'
-import {setTimeout as delay} from 'node:timers/promises'
+import {setTimeout as delay,scheduler} from 'node:timers/promises'
 
 const ident=(domain,value)=>identifier('im.'+domain,value)
 const account={tenantId:ident('tenant','t'),networkId:ident('network','n'),accountId:ident('account','a')}
@@ -50,9 +50,9 @@ test('quote wins without classifier; unquoted decision receives a snapshot and t
  const requests=[],config=Config({enabled:true,intentEnabled:true}),controller=new AbortController(),policy=new QuotePolicy(config,()=>1,()=>({async classify(request,signal){requests.push({request,signal});return'reply'}}))
  const a=message('1','g','a','What do you think?'),b=message('2','g','b','I disagree'),quote=message('3','g','c','quote',{parts:[{type:'reply',messageId:ident('message','reply')}]})
  policy.seen(a);policy.observe(a,result('My opinion'));policy.seen(b)
- assert.equal(await policy.decide(b,controller.signal),'reply');assert.equal(requests.length,1);assert.equal(requests[0].signal,controller.signal)
+ assert.equal(await policy.decide(b,controller.signal),'reply');assert.equal(requests.length,1);assert.equal(requests[0].signal.aborted,false)
  assert.deepEqual(requests[0].request.history.map(x=>x.text),['What do you think?','My opinion'])
- policy.seen(quote);assert.equal(await policy.decide(quote,controller.signal),'reply');assert.equal(requests.length,1)
+ policy.seen(quote);assert.equal(await policy.decide(quote,controller.signal),'reply');assert.equal(requests.length,1);controller.abort();assert.equal(requests[0].signal.aborted,true)
 })
 test('intent routing is opt-in and rejects excessive memory settings',()=>{
  let effects=0;const ctx={get:()=>undefined,effect:()=>{effects++}}
@@ -72,4 +72,43 @@ test('intent routing follows classifier service lifetime regardless of startup o
  assert.equal(ctx.get('qqTurnIntent'),undefined);assert.equal(ctx.get('qqTurnPolicy'),installed)
  await assert.rejects(installed.decide(input,signal),/classifier is unavailable/)
  const quoted=message('lifetime-quote','g','b','quoted',{parts:[{type:'reply',messageId:ident('message','reply')}]});assert.equal(await installed.decide(quoted,signal),'reply')
+})
+
+
+test('policy close cancels and joins owned classifier work before allowing disposal to finish',async()=>{
+ let enter,release,ownedSignal,settled=false
+ const entered=new Promise(resolve=>enter=resolve),gate=new Promise(resolve=>release=resolve)
+ const policy=new QuotePolicy(Config({enabled:true,intentEnabled:true}),()=>1,()=>({async classify(_request,signal){ownedSignal=signal;enter();await gate;return'reply'}})),input=message('close','g','a','pending')
+ policy.seen(input)
+ const decision=policy.decide(input,new AbortController().signal),rejected=assert.rejects(decision,error=>error.name==='AbortError')
+ await entered
+ const closing=policy.close().then(()=>{settled=true})
+ assert.equal(ownedSignal.aborted,true);await scheduler.yield();assert.equal(settled,false)
+ await assert.rejects(policy.decide(input,new AbortController().signal),error=>error.name==='AbortError')
+ release();await rejected;await closing;assert.equal(settled,true);await policy.close()
+})
+
+test('native policy unmount aborts the classifier signal and waits for its owned work',{timeout:10000},async t=>{
+ const ctx=new Context();let enter,release,aborted,ownedSignal
+ const entered=new Promise(resolve=>enter=resolve),gate=new Promise(resolve=>release=resolve),abortObserved=new Promise(resolve=>aborted=resolve)
+ const provider=ctx.plugin({name:'owned-classifier',apply(ctx){ctx.effect(()=>ctx.provide('qqTurnIntent',{async classify(_request,signal){ownedSignal=signal;signal.addEventListener('abort',aborted,{once:true});enter();await gate;return'reply'}}))}})
+ await provider.await();t.after(()=>provider.dispose())
+ const mounted=ctx.plugin({name:'owned-policy',apply(ctx){apply(ctx,Config({enabled:true,intentEnabled:true}))}});await mounted.await();t.after(()=>mounted.dispose())
+ const policy=ctx.get('qqTurnPolicy'),input=message('unmount','g','a','pending');policy.seen(input)
+ const pending=policy.decide(input,new AbortController().signal),rejected=assert.rejects(pending,error=>error.name==='AbortError');await entered
+ let stopped=false;const closed=mounted.dispose().then(()=>{stopped=true});t.after(()=>release())
+ try{
+  await abortObserved;assert.equal(ownedSignal.aborted,true);await scheduler.yield();assert.equal(stopped,false)
+ }finally{release()}
+ await rejected;await closed;assert.equal(stopped,true);assert.equal(ctx.get('qqTurnPolicy'),undefined)
+})
+
+
+test('a fully expired group window starts a fresh classifier identity while retaining an active topic identity',()=>{
+ let now=1;const context=new RecentContext(limits,()=>now),first=message('old','g','alice','old topic')
+ context.seen(first);const oldId=context.request(first).contextId
+ now=500;const second=message('active','g','bob','same topic');context.seen(second);assert.equal(context.request(second).contextId,oldId)
+ now=1501;const next=message('new','g','carol','new topic');context.seen(next);const fresh=context.request(next)
+ assert.notEqual(fresh.contextId,oldId);assert.deepEqual(fresh.history,[]);assert.equal(fresh.candidate.text,'new topic')
+ context.clear();assert.equal(context.request(next),null)
 })
