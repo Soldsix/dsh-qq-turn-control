@@ -1,0 +1,38 @@
+{
+  "version": "0.2.0-development",
+  "sourceCommit": "affac7198eb24f1fed3b8bfb82265c9a920c64ad",
+  "sha256": "1ee074f16cf4fa08e9f55b26d5768af49b5eb47df9dbf7ef9de9ffae79a1a16e",
+  "bytes": 35227,
+  "unitTests": {
+    "node22": 32,
+    "node24": 32
+  },
+  "synthetic15MemberRoutingCases": 3,
+  "nativeChecks": 13,
+  "controlledAdapterRequests": 15,
+  "webChecks": 8,
+  "independentConsumer": {
+    "passed": true,
+    "installedFilesVerified": 28,
+    "installedChatFilesVerified": 61,
+    "declarationFiles": 335,
+    "ancestorDependenciesBorrowed": false,
+    "strictDeclarationErrors": 0,
+    "runtimeSmoke": {
+      "passed": true,
+      "startedApplications": 0,
+      "openedReportStores": 0
+    },
+    "realModelApiRequests": 0,
+    "realQqMessagesSent": 0
+  },
+  "ci": {
+    "run": 42608553193,
+    "passedJobs": 9
+  },
+  "anonymousDownloadHashVerified": true,
+  "realModelApiRequests": 0,
+  "qqMessagesSent": 0,
+  "semanticQualityVerified": false,
+  "productionUntouched": true
+}

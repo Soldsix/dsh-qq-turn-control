@@ -1,0 +1,36 @@
+{
+  "passed": true,
+  "dependencyResolution": "public-manifest",
+  "checks": [
+    "native-page-available-while-policy-disabled",
+    "native-save-enables-policy",
+    "missing-intent-provider-rejected-without-saving",
+    "invalid-save-retains-draft",
+    "polling-retains-draft-and-valid-settings-save",
+    "native-bot-identities-and-frequency-fields-save-and-reject-duplicates",
+    "light-dark-and-narrow-layout",
+    "settings-survive-browser-reload-and-policy-disables"
+  ],
+  "installedFiles": {
+    "chat": 61,
+    "turn": 28
+  },
+  "archives": [
+    {
+      "name": "dsh-im-kit-0.2.1.tgz",
+      "sha256": "48686023b7307e3296d403994ad5cfb5cc7bfa7e4be5ef423af934b5286c40f0"
+    },
+    {
+      "name": "dsh-qq-chat-0.2.3.tgz",
+      "sha256": "7e0b13f702f1d05e2d90c66a9939ea2e23e7111dfa474666ceef0a39e6d5ef42"
+    },
+    {
+      "name": "dsh-qq-turn-control-0.2.0-development.tgz",
+      "sha256": "1ee074f16cf4fa08e9f55b26d5768af49b5eb47df9dbf7ef9de9ffae79a1a16e"
+    }
+  ],
+  "clientErrors": [],
+  "consoleErrors": [],
+  "realQqMessagesSent": 0,
+  "realModelApiRequests": 0
+}

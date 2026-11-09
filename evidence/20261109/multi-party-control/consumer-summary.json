@@ -1,0 +1,15 @@
+{
+  "passed": true,
+  "installedFilesVerified": 28,
+  "installedChatFilesVerified": 61,
+  "declarationFiles": 335,
+  "ancestorDependenciesBorrowed": false,
+  "strictDeclarationErrors": 0,
+  "runtimeSmoke": {
+    "passed": true,
+    "startedApplications": 0,
+    "openedReportStores": 0
+  },
+  "realModelApiRequests": 0,
+  "realQqMessagesSent": 0
+}
