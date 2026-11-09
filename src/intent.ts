@@ -5,7 +5,7 @@ import {brandString,type Branded} from '@deepseek-ai/dsh-brand'
 import type {ChatResult} from 'dsh-qq-chat'
 
 /** One text-only observation presented to a classifier; speaker aliases are scoped to one call. */
-export interface IntentTurn{readonly speaker:string;readonly text:string;readonly truncated:boolean;readonly media:readonly string[];readonly mentions:readonly string[];readonly hasReply:boolean}
+export interface IntentTurn{readonly speaker:string;readonly text:string;readonly truncated:boolean;readonly media:readonly string[];readonly mentions:readonly string[];readonly hasReply:boolean;readonly directedToBot?:boolean;readonly replyTo?:{readonly speaker:string;readonly text:string;readonly truncated:boolean;readonly media:readonly string[]};readonly respondingTo?:string}
 /** Ephemeral conversation identity for classifier session isolation; changes on eviction or restart. */
 export type IntentContextId=Branded<'qq-turn.intent-context'>
 /** Metadata excludes account, group, sender and message IDs; user text remains untrusted. */
@@ -17,7 +17,7 @@ export interface TurnIntent{
 }
 /** Runtime context limits supplied by the native profile. */
 export interface ContextLimits{readonly maxScopes:number;readonly contextWindowMs:number;readonly maxContextMessages:number;readonly maxContextChars:number}
-interface Entry{readonly id:MessageId|null;readonly sender:UserId|null;readonly at:number;readonly text:string;readonly truncated:boolean;readonly media:readonly string[];readonly mentions:readonly UserId[];readonly hasReply:boolean}
+interface Entry{readonly id:MessageId|null;readonly sender:UserId|null;readonly at:number;readonly text:string;readonly truncated:boolean;readonly media:readonly string[];readonly mentions:readonly UserId[];readonly hasReply:boolean;readonly directedToBot:boolean;readonly replyIds:readonly MessageId[];readonly target:MessageId|null;readonly respondingTo:UserId|null}
 interface Window{readonly id:IntentContextId;readonly entries:Entry[]}
 function wellFormed(value:string):string{return value.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g,'\uFFFD')}
 
@@ -38,7 +38,7 @@ export class RecentContext{
  /** @param input - fresh, admitted source. */
  seen(input:InboundMessage):void{
   if(input.scope.kind!=='group')return
-  let text='',truncated=false,hasReply=false;const media:string[]=[],mentions:UserId[]=[]
+  let text='',truncated=false,hasReply=false;const media:string[]=[],mentions:UserId[]=[],targets:MessageId[]=[]
   for(const part of input.parts){
    if(part.type==='text'){
     const remaining=this.limits.maxContextChars-text.length
@@ -46,18 +46,18 @@ export class RecentContext{
     if(remaining>0)text+=part.text.slice(0,remaining)
    }else if(part.type==='mention'){
     if(!mentions.includes(part.userId)){if(mentions.length<this.limits.maxContextMessages)mentions.push(part.userId);else truncated=true}
-   }else if(part.type==='reply')hasReply=true
+   }else if(part.type==='reply'){hasReply=true;if(targets.length<2)targets.push(part.messageId)}
    else if(part.type==='image'||part.type==='audio'||part.type==='video'||part.type==='file'||part.type==='forward'||part.type==='card'){
     if(!media.includes(part.type))media.push(part.type)
    }
   }
-  this.remember(scopeKey(input.scope),{id:input.messageId,sender:input.senderId,at:this.clock(),text:wellFormed(text),truncated,media,mentions,hasReply})
+  this.remember(scopeKey(input.scope),{id:input.messageId,sender:input.senderId,at:this.clock(),text:wellFormed(text),truncated,media,mentions,hasReply,directedToBot:input.directedToBot,replyIds:[],target:targets.length===1?targets[0]!:null,respondingTo:null})
  }
  /** @param input - source that caused the result. @param result - completed transport outcome. */
  observe(input:InboundMessage,result:ChatResult):void{
   if(input.scope.kind!=='group'||result.status!=='responded'||result.modelOutcome!=='completed'||result.receipt?.status!=='accepted'||result.reply===null)return
   const text=wellFormed(result.reply.slice(0,this.limits.maxContextChars))
-  this.remember(scopeKey(input.scope),{id:null,sender:null,at:this.clock(),text,truncated:result.reply.length>text.length,media:[],mentions:[],hasReply:false})
+  this.remember(scopeKey(input.scope),{id:null,sender:null,at:this.clock(),text,truncated:result.reply.length>text.length,media:[],mentions:[],hasReply:false,directedToBot:false,replyIds:result.receipt.messageIds.slice(0,this.limits.maxContextMessages),target:null,respondingTo:input.senderId})
  }
  /** @param input - exact candidate. @returns bounded context ending at the candidate, or null when absent or expired. */
  request(input:InboundMessage):IntentRequest|null{
@@ -67,10 +67,11 @@ export class RecentContext{
   if(index<0||now<entries[index]!.at||now-entries[index]!.at>this.limits.contextWindowMs)return null
   const relevant=entries.slice(0,index+1).filter(item=>now>=item.at&&now-item.at<=this.limits.contextWindowMs),aliases=new Map<UserId,string>()
   const alias=(user:UserId):string=>{const name=aliases.get(user)??'member-'+(aliases.size+1);aliases.set(user,name);return name}
-  const convert=(item:Entry):IntentTurn=>{
+  const convert=(item:Entry,index:number):IntentTurn=>{
    let speaker='bot'
    if(item.sender!==null)speaker=alias(item.sender)
-   return{speaker,text:item.text,truncated:item.truncated,media:[...item.media],mentions:item.mentions.map(alias),hasReply:item.hasReply}
+   const target=item.target===null?undefined:relevant.slice(0,index).find(entry=>entry.id===item.target||entry.replyIds.includes(item.target!))
+   return{speaker,text:item.text,truncated:item.truncated,media:[...item.media],mentions:item.mentions.map(alias),hasReply:item.hasReply,...item.directedToBot?{directedToBot:true}:{},...target?{replyTo:{speaker:target.sender===null?'bot':alias(target.sender),text:target.text,truncated:target.truncated,media:[...target.media]}}:{},...item.respondingTo===null?{}:{respondingTo:alias(item.respondingTo)}}
   }
   const turns=relevant.map(convert),candidate=turns.pop()
   return candidate?{contextId:window.id,history:turns,candidate}:null

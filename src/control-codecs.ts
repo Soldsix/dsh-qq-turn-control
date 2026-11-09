@@ -2,7 +2,7 @@
 import * as z from 'zod/mini'
 import type {Settings} from './fields.ts'
 import type {Snapshot,SaveRequest} from './control-types.ts'
-const config=z.strictObject({enabled:z.boolean(),quoteWindowMs:z.int(),maxScopes:z.int(),maxRepliesPerScope:z.int(),intentEnabled:z.boolean(),contextWindowMs:z.int(),maxContextMessages:z.int(),maxContextChars:z.int()} satisfies {[Key in keyof Settings]:z.ZodMiniType<Settings[Key]>})
+const config=z.strictObject({enabled:z.boolean(),quoteWindowMs:z.int(),maxScopes:z.int(),maxRepliesPerScope:z.int(),intentEnabled:z.boolean(),contextWindowMs:z.int(),maxContextMessages:z.int(),maxContextChars:z.int(),botIds:z.array(z.string()),botWindowMs:z.int(),maxBotReplies:z.int(),maxBotGroupReplies:z.int(),ambientWindowMs:z.int(),minAmbientGapMs:z.int(),maxAmbientReplies:z.int()} satisfies {[Key in keyof Settings]:z.ZodMiniType<Settings[Key]>})
 const revision=z.string().check(z.regex(/^[a-f0-9]{64}$/))
 /** Only declared fields may be saved. */
 export const saveSchema:z.ZodMiniType<SaveRequest>=z.strictObject({revision,patch:z.pipe(z.partial(config),z.transform(value=>Object.fromEntries(Object.entries(value).filter(([,item])=>item!==undefined)) as Partial<Settings>))})

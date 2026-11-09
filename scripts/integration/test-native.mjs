@@ -11,6 +11,7 @@ import {join,basename,relative,isAbsolute,delimiter} from 'node:path'
 import {fileURLToPath,pathToFileURL} from 'node:url'
 import {setTimeout as delay} from 'node:timers/promises'
 import {verifyInstalledArchive} from './verify-installed.mjs'
+import {parse} from 'yaml'
 
 const root=fileURLToPath(new URL('../../',import.meta.url)),args=process.argv
 const argument=name=>{const index=args.indexOf(name);assert.ok(index>=0&&args[index+1],'Required '+name);return args[index+1]}
@@ -84,11 +85,23 @@ const exit=once(child,'close').then(([code,signal])=>{exitCode=code;return{code,
 try{
  const deadline=Date.now()+90000
  while(Date.now()<deadline){try{result=JSON.parse(await readFile(join(attempt,'result.json'),'utf8'));break}catch(error){if(error.code!=='ENOENT')throw error}assert.equal(exitCode,undefined,'Native DSH exited before the routing probe');await delay(30)}
- assert.ok(result,'Native routing probe timed out');assert.equal(result.passed,true,JSON.stringify(result.error));assert.equal(captures.length,8)
+ assert.ok(result,'Native routing probe timed out');assert.equal(result.passed,true,JSON.stringify(result.error));assert.equal(captures.length,12)
  assert.ok(JSON.stringify(captures[1].messages).includes('FIRST'));assert.ok(JSON.stringify(captures[1].messages).includes('LAB_REPLY_1'))
  assert.ok(!JSON.stringify(captures[2].messages).includes('FIRST'),'Conversation history crossed groups')
  child.stdin.write(JSON.stringify({jsonrpc:'2.0',id:1,method:'shutdown',params:{}})+'\n')
  const stopped=await Promise.race([exit,delay(15000,undefined,{ref:false}).then(()=>{throw Error('Native shutdown timed out')})]);assert.deepEqual(stopped,{code:0,signal:null})
+ const journalPath=join(attempt,'chat.sqlite3'),digest=()=>readFile(journalPath).then(bytes=>createHash('sha256').update(bytes).digest('hex')),original=await digest()
+ const names=value=>Array.isArray(value)?value.flatMap(names):value&&typeof value==='object'?[...typeof value.name==='string'?[value.name]:[],...Object.values(value).flatMap(names)]:[]
+ const yamlOptions={customTags:[{tag:'tag:yaml.org,2002:js',resolve:value=>value}]}
+ await run([dsh,'plugin','--profile',profile,'remove',manifest.name],area)
+ const removed=JSON.parse(await readFile(join(profileRoot,'package.json'),'utf8'));assert.equal(removed.dependencies?.[manifest.name],undefined)
+ const without=names(parse(await run([dsh,'--profile',profile,'--dump-config'],area),yamlOptions));assert.ok(!without.includes('dsh-qq-turn-control')&&!without.includes('dsh-qq-turn-control/control'))
+ assert.equal(await digest(),original,'Removal changed retained Chat receipts')
+ await run([dsh,'plugin','--profile',profile,'add',archives[2].path],area)
+ await verifyInstalledArchive(archives[2].path,join(profileRoot,'node_modules',manifest.name),join(attempt,'reinstalled-files.json'))
+ const restored=names(parse(await run([dsh,'--profile',profile,'--dump-config'],area),yamlOptions));assert.ok(restored.includes('dsh-qq-turn-control')&&restored.includes('dsh-qq-turn-control/control'))
+ assert.equal(await digest(),original,'Reinstallation changed retained Chat receipts')
+ result.checks.push('native-cli-remove-and-reinstall-retain-chat-journal')
  await writeFile(join(attempt,'summary.json'),JSON.stringify({passed:true,checks:result.checks,archives:archives.map(({name,sha256})=>({name,sha256})),installedFiles,nativeAdapterRequests:captures.length,normalShutdown:true,realQqMessagesSent:0,realModelApiRequests:0,semanticQualityVerified:false},null,2)+'\n')
  console.log(JSON.stringify({area,attempt,passed:true,checks:result.checks,nativeAdapterRequests:captures.length,realQqMessagesSent:0}))
 }finally{

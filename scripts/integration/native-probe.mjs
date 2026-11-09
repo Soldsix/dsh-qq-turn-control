@@ -55,6 +55,15 @@ async function probe(ctx,config){
   }
   assert.equal(ctx.turnTest.outputs.length,8)
   checks.push('fifteen-synthetic-participants-produce-only-one-quote-and-one-explicit-reply')
+  const beforeBots=await invoke('describe')
+  const guarded=await invoke('save',{request:{revision:beforeBots.revision,patch:{botIds:['robot-1','robot-2','robot-3'],maxBotReplies:2,maxBotGroupReplies:3}}});assert.deepEqual(guarded.config.botIds,['robot-1','robot-2','robot-3'])
+  await Promise.all(Array.from({length:15},(_,index)=>send(source('bot-loop-'+index,'one','robot-'+(index%3+1),true,text('BOT_LOOP')))))
+  assert.equal(ctx.turnTest.outputs.length,11)
+  const botOutputs=ctx.turnTest.outputs.slice(8);for(const sender of ['robot-1','robot-2','robot-3'])assert.ok(botOutputs.filter(value=>value.parts[0]?.messageId?.startsWith('bot-loop-')&&Number(value.parts[0].messageId.slice(9))%3+1===Number(sender.slice(6))).length<=2)
+  await send(source('bot-loop-0','one','robot-1',true,text('BOT_LOOP')));assert.equal(ctx.turnTest.outputs.length,11)
+  checks.push('native-parallel-other-bot-mentions-have-atomic-sender-and-group-budgets-without-replay')
+  await send(source('human-after-bot-limit','one','ordinary-member',true,text('HUMAN_DIRECT')));assert.equal(ctx.turnTest.outputs.length,12)
+  checks.push('ordinary-explicit-human-mention-survives-other-bot-budget-exhaustion')
   await writeFile(config.resultPath,JSON.stringify({passed:true,checks,outputs:ctx.turnTest.outputs.length,realQqMessagesSent:0},null,2)+'\n')
  }catch(error){await writeFile(config.resultPath,JSON.stringify({passed:false,checks,error:{message:error.message,stack:error.stack},realQqMessagesSent:0},null,2)+'\n')}
 }

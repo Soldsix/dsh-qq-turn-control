@@ -1,6 +1,6 @@
 {
   "name": "dsh-qq-turn-control",
-  "version": "0.1.0",
+  "version": "0.2.0-development",
   "description": "Optional quote-aware reply routing for DSH chat.",
   "type": "module",
   "license": "MIT",
@@ -33,7 +33,9 @@
     "LICENSE",
     "cordis.patch.yml",
     "README.zh.md",
-    "README.i18n.yaml"
+    "README.i18n.yaml",
+    "docs/upgrade-guide/**/*.md",
+    "docs/upgrade-guide/**/*.yaml"
   ],
   "dsh": {
     "bundle": {
@@ -111,7 +113,7 @@
   "dependencies": {
     "zod": "4.6.6",
     "dsh-im-kit": "https://github.com/Soldsix/dsh-im-kit/releases/download/v0.2.1/dsh-im-kit-0.2.1.tgz",
-    "dsh-qq-chat": "https://github.com/Soldsix/dsh-qq-chat/releases/download/v0.2.1/dsh-qq-chat-0.2.1.tgz"
+    "dsh-qq-chat": "https://github.com/Soldsix/dsh-qq-chat/releases/download/v0.2.2/dsh-qq-chat-0.2.2.tgz"
   },
   "repository": {
     "type": "git",
